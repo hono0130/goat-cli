@@ -1,0 +1,6 @@
+sequenceDiagram
+    participant ClientStateMachine
+    participant ServiceStateMachine
+
+    ClientStateMachine->>ServiceStateMachine: Request
+    ServiceStateMachine->>ClientStateMachine: Response

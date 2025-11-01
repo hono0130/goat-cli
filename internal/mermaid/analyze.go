@@ -11,11 +11,13 @@ import (
 )
 
 const (
-	stateMachineType = "StateMachine"
-	sendToFunction   = "SendTo"
-	onEntryHandler   = "OnEntry"
-	onEventHandler   = "OnEvent"
-	onExitHandler    = "OnExit"
+	stateMachineType         = "StateMachine"
+	sendToFunction           = "SendTo"
+	protobufSendToFunction   = "ProtobufSendTo"
+	onEntryHandler           = "OnEntry"
+	onEventHandler           = "OnEvent"
+	onExitHandler            = "OnExit"
+	onProtobufMessageHandler = "OnProtobufMessage"
 )
 
 type sequenceDiagram struct {
@@ -214,15 +216,12 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		return nil, false, nil
 	}
 
-	var kind string
-	switch selExpr.Sel.Name {
-	case onEntryHandler, onEventHandler, onExitHandler:
-		kind = selExpr.Sel.Name
-	default:
+	kind := selExpr.Sel.Name
+	if kind != onEntryHandler && kind != onEventHandler && kind != onExitHandler && kind != onProtobufMessageHandler {
 		return nil, false, nil
 	}
 
-	if len(callExpr.Args) < 3 {
+	if !validateHandlerArgs(kind, callExpr.Args) {
 		return nil, false, nil
 	}
 
@@ -236,11 +235,20 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		return nil, false, nil
 	}
 
-	eventType := ""
-	if kind == onEventHandler && len(callExpr.Args) >= 4 {
-		if name, ok := namedTypeName(callExpr.Args[2], pkg.TypesInfo); ok {
-			eventType = name
+	var eventType string
+	switch kind {
+	case onEventHandler:
+		name, ok := namedTypeName(callExpr.Args[2], pkg.TypesInfo)
+		if !ok {
+			return nil, false, fmt.Errorf("failed to resolve event type for %s handler", kind)
 		}
+		eventType = name
+	case onProtobufMessageHandler:
+		name, ok := namedTypeName(callExpr.Args[3], pkg.TypesInfo)
+		if !ok {
+			return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
+		}
+		eventType = name
 	}
 	handlerID := buildHandlerID(stateMachine, kind, eventType, handlerFunc, pkg)
 
@@ -251,6 +259,19 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		handlerID:    handlerID,
 		function:     handlerFunc,
 	}, true, nil
+}
+
+func validateHandlerArgs(kind string, args []ast.Expr) bool {
+	switch kind {
+	case onEntryHandler, onExitHandler:
+		return len(args) == 3
+	case onEventHandler:
+		return len(args) == 4
+	case onProtobufMessageHandler:
+		return len(args) == 6
+	default:
+		return false
+	}
 }
 
 func resolveStateMachineType(expr ast.Expr, info *types.Info) string {
@@ -295,7 +316,7 @@ func extractSendToFlow(callExpr *ast.CallExpr, pkg *load.PackageInfo, info *hand
 	if !ok {
 		return flow{}, false, nil
 	}
-	if selExpr.Sel.Name != sendToFunction {
+	if selExpr.Sel.Name != sendToFunction && selExpr.Sel.Name != protobufSendToFunction {
 		return flow{}, false, nil
 	}
 
@@ -443,7 +464,7 @@ func uniqueNextHandlers(current flow, flows []flow) []string {
 	result := make([]string, 0)
 	seen := make(map[string]bool)
 	for _, candidate := range flows {
-		if candidate.handlerType == onEventHandler &&
+		if isEventHandler(candidate.handlerType) &&
 			candidate.handlerEventType == current.eventType &&
 			candidate.from == current.to &&
 			!seen[candidate.handlerID] {
@@ -452,6 +473,10 @@ func uniqueNextHandlers(current flow, flows []flow) []string {
 		}
 	}
 	return result
+}
+
+func isEventHandler(kind string) bool {
+	return kind == onEventHandler || kind == onProtobufMessageHandler
 }
 
 func isFromGoat(sel *ast.SelectorExpr, info *types.Info) (bool, error) {
@@ -465,14 +490,18 @@ func isFromGoat(sel *ast.SelectorExpr, info *types.Info) (bool, error) {
 	}
 	if pkgName, ok := obj.(*types.PkgName); ok {
 		if imported := pkgName.Imported(); imported != nil {
-			return imported.Path() == load.GoatPackageFullPath, nil
+			return isGoatPackage(imported.Path()), nil
 		}
 		return false, fmt.Errorf("unexpected nil imported package for %q", id.Name)
 	}
 	if pkg := obj.Pkg(); pkg != nil {
-		return pkg.Path() == load.GoatPackageFullPath, nil
+		return isGoatPackage(pkg.Path()), nil
 	}
 	return false, fmt.Errorf("object for identifier %q has no package: %T", id.Name, obj)
+}
+
+func isGoatPackage(path string) bool {
+	return path == load.GoatPackageFullPath || path == load.GoatProtobufPackageFullPath
 }
 
 func namedTypeName(expr ast.Expr, info *types.Info) (string, bool) {
