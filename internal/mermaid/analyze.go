@@ -490,18 +490,15 @@ func isFromGoat(sel *ast.SelectorExpr, info *types.Info) (bool, error) {
 	}
 	if pkgName, ok := obj.(*types.PkgName); ok {
 		if imported := pkgName.Imported(); imported != nil {
-			return isGoatPackage(imported.Path()), nil
+			return imported.Path() == load.GoatPackageFullPath || imported.Path() == load.GoatProtobufPackageFullPath, nil
 		}
 		return false, fmt.Errorf("unexpected nil imported package for %q", id.Name)
 	}
 	if pkg := obj.Pkg(); pkg != nil {
-		return isGoatPackage(pkg.Path()), nil
+		path := pkg.Path()
+		return path == load.GoatPackageFullPath || path == load.GoatProtobufPackageFullPath, nil
 	}
 	return false, fmt.Errorf("object for identifier %q has no package: %T", id.Name, obj)
-}
-
-func isGoatPackage(path string) bool {
-	return path == load.GoatPackageFullPath || path == load.GoatProtobufPackageFullPath
 }
 
 func namedTypeName(expr ast.Expr, info *types.Info) (string, bool) {
