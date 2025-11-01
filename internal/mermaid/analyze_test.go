@@ -1,6 +1,7 @@
 package mermaid
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,6 +13,16 @@ import (
 func loadSpecPackage(t *testing.T) *load.PackageInfo {
 	t.Helper()
 	pkg, err := load.Load(test.FixtureDir(t))
+	if err != nil {
+		t.Fatalf("failed to load fixture package: %v", err)
+	}
+	return pkg
+}
+
+func loadProtobufPackage(t *testing.T) *load.PackageInfo {
+	t.Helper()
+	dir := filepath.Join(test.FixtureDir(t), "protobuf")
+	pkg, err := load.Load(dir)
 	if err != nil {
 		t.Fatalf("failed to load fixture package: %v", err)
 	}
@@ -137,6 +148,41 @@ func TestCommunicationFlows(t *testing.T) {
 
 	if diff := cmp.Diff(want, got, cmp.AllowUnexported(flow{})); diff != "" {
 		t.Fatalf("communicationFlows mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCommunicationFlows_OnProtobufMessage(t *testing.T) {
+	t.Parallel()
+	pkg := loadProtobufPackage(t)
+	got, err := communicationFlows(pkg)
+	if err != nil {
+		t.Fatalf("communicationFlows returned error: %v", err)
+	}
+
+	want := []flow{
+		{
+			from:        "ClientStateMachine",
+			to:          "ServiceStateMachine",
+			eventType:   "Request",
+			handlerType: onEntryHandler,
+			handlerID:   "ClientStateMachine_OnEntry__spec.go:47",
+			fileName:    "spec.go",
+			line:        49,
+		},
+		{
+			from:             "ServiceStateMachine",
+			to:               "ClientStateMachine",
+			eventType:        "Response",
+			handlerType:      onProtobufMessageHandler,
+			handlerEventType: "Request",
+			handlerID:        "ServiceStateMachine_OnProtobufMessage_Request_spec.go:54",
+			fileName:         "spec.go",
+			line:             56,
+		},
+	}
+
+	if diff := cmp.Diff(want, got, cmp.AllowUnexported(flow{})); diff != "" {
+		t.Fatalf("communicationFlows (protobuf) mismatch (-want +got):\n%s", diff)
 	}
 }
 

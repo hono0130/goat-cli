@@ -22,3 +22,18 @@ func TestRenderSequenceDiagram(t *testing.T) {
 		t.Fatalf("rendered diagram mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestRenderSequenceDiagram_OnProtobufMessage(t *testing.T) {
+	t.Parallel()
+	pkg := loadProtobufPackage(t)
+	var buf bytes.Buffer
+	if err := RenderSequenceDiagram(pkg, &buf); err != nil {
+		t.Fatalf("RenderSequenceDiagram returned error: %v", err)
+	}
+
+	got := buf.String()
+	want := test.ReadGolden(t, "protobuf/sequence_diagram.golden")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("rendered diagram (protobuf) mismatch (-want +got):\n%s", diff)
+	}
+}
