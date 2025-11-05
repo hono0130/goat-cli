@@ -254,15 +254,17 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 	case onProtobufMessageHandler:
 		// Support both old and new signatures:
 		// Old: OnProtobufMessage(spec, state, msgDescriptor, msgInstance, msgType, handler) - 6 args
+		//      handlerEventType = msgInstance (index 3)
 		// New: OnProtobufMessage(spec, state, msgDescriptor, msgType, handler) - 5 args
+		//      handlerEventType = msgType (index 3)
 		if len(callExpr.Args) >= 6 {
-			// Old signature: get message type from fifth argument (index 4)
-			eventType, ok = namedTypeName(callExpr.Args[4], pkg.TypesInfo)
+			// Old signature: get message type from fourth argument (index 3) - the msgInstance
+			eventType, ok = namedTypeName(callExpr.Args[3], pkg.TypesInfo)
 			if !ok {
 				return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
 			}
 		} else if len(callExpr.Args) >= 5 {
-			// New signature: get message type from fourth argument (index 3)
+			// New signature: get message type from fourth argument (index 3) - the msgType
 			eventType, ok = namedTypeName(callExpr.Args[3], pkg.TypesInfo)
 			if !ok {
 				return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
