@@ -235,17 +235,38 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		return nil, false, nil
 	}
 
-	var eventType string
+	// Extract event type based on handler kind and signature
+	eventType := ""
 	switch kind {
 	case onEventHandler:
-		eventType, ok = namedTypeName(callExpr.Args[2], pkg.TypesInfo)
-		if !ok {
-			return nil, false, fmt.Errorf("failed to resolve event type for %s handler", kind)
+		// Support both old and new signatures:
+		// Old: OnEvent(spec, state, eventInstance, handler) - 4 args
+		// New: OnEvent(spec, state, handler) - 3 args
+		if len(callExpr.Args) >= 4 {
+			// Old signature: get event type from third argument
+			if name, ok := namedTypeName(callExpr.Args[2], pkg.TypesInfo); ok {
+				eventType = name
+			}
+		} else {
+			// New signature: extract event type from handler function's second parameter
+			eventType = extractEventTypeFromHandler(handlerFunc, pkg.TypesInfo)
 		}
 	case onProtobufMessageHandler:
-		eventType, ok = namedTypeName(callExpr.Args[3], pkg.TypesInfo)
-		if !ok {
-			return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
+		// Support both old and new signatures:
+		// Old: OnProtobufMessage(spec, state, msgDescriptor, msgInstance, msgType, handler) - 6 args
+		// New: OnProtobufMessage(spec, state, msgDescriptor, msgType, handler) - 5 args
+		if len(callExpr.Args) >= 6 {
+			// Old signature: get message type from fifth argument (index 4)
+			eventType, ok = namedTypeName(callExpr.Args[4], pkg.TypesInfo)
+			if !ok {
+				return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
+			}
+		} else if len(callExpr.Args) >= 5 {
+			// New signature: get message type from fourth argument (index 3)
+			eventType, ok = namedTypeName(callExpr.Args[3], pkg.TypesInfo)
+			if !ok {
+				return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
+			}
 		}
 	}
 	handlerID := buildHandlerID(stateMachine, kind, eventType, handlerFunc, pkg)
@@ -264,9 +285,11 @@ func validateHandlerArgs(kind string, args []ast.Expr) bool {
 	case onEntryHandler, onExitHandler:
 		return len(args) == 3
 	case onEventHandler:
-		return len(args) == 4
+		// Support both old (4 args) and new (3 args) signatures
+		return len(args) == 3 || len(args) == 4
 	case onProtobufMessageHandler:
-		return len(args) == 6
+		// Support both old (6 args) and new (5 args) signatures
+		return len(args) == 5 || len(args) == 6
 	default:
 		return false
 	}
@@ -510,4 +533,42 @@ func namedTypeName(expr ast.Expr, info *types.Info) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func extractEventTypeFromHandler(handlerFunc *ast.FuncLit, info *types.Info) string {
+	if handlerFunc.Type == nil || handlerFunc.Type.Params == nil {
+		return ""
+	}
+
+	// OnEvent handler signature: func(ctx context.Context, event *EventType, sm *StateMachine)
+	// We need the second parameter (index 1)
+	params := handlerFunc.Type.Params.List
+	if len(params) < 2 {
+		return ""
+	}
+
+	// The event parameter is at index 1
+	eventParam := params[1]
+	if len(eventParam.Names) == 0 {
+		return ""
+	}
+
+	// Get the type of the event parameter
+	eventParamType := eventParam.Type
+
+	// Try to get type info from the parameter
+	tv, ok := info.Types[eventParamType]
+	if !ok || tv.Type == nil {
+		return ""
+	}
+
+	typ := tv.Type
+	if ptr, ok := typ.(*types.Pointer); ok {
+		typ = ptr.Elem()
+	}
+	if named, ok := typ.(*types.Named); ok {
+		return named.Obj().Name()
+	}
+
+	return ""
 }
