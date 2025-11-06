@@ -50,7 +50,6 @@ func createProtobufModel() {
 		})
 
 	protobuf.OnProtobufMessage(serviceSpec, serviceState, "HandleRequest",
-		&Request{}, &Response{},
 		func(ctx context.Context, request *Request, service *ServiceStateMachine) protobuf.ProtobufResponse[*Response] {
 			response := &Response{}
 			return protobuf.ProtobufSendTo(ctx, service.Client, response)

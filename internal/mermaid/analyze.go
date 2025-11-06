@@ -243,12 +243,9 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		// Extract event type from handler function's second parameter
 		eventType = extractEventTypeFromHandler(handlerFunc, pkg.TypesInfo)
 	case onProtobufMessageHandler:
-		// New signature: OnProtobufMessage(spec, state, msgDescriptor, msgType, handler) - 5 args
-		// Get message type from fourth argument (index 3) - the msgType
-		eventType, ok = namedTypeName(callExpr.Args[3], pkg.TypesInfo)
-		if !ok {
-			return nil, false, fmt.Errorf("failed to resolve protobuf message type for %s handler", kind)
-		}
+		// New signature: OnProtobufMessage(spec, state, msgDescriptor, handler) - 4 args
+		// Extract message type from handler function's second parameter
+		eventType = extractEventTypeFromHandler(handlerFunc, pkg.TypesInfo)
 	}
 	handlerID := buildHandlerID(stateMachine, kind, eventType, handlerFunc, pkg)
 
@@ -268,7 +265,7 @@ func validateHandlerArgs(kind string, args []ast.Expr) bool {
 	case onEventHandler:
 		return len(args) == 3
 	case onProtobufMessageHandler:
-		return len(args) == 5
+		return len(args) == 4
 	default:
 		return false
 	}

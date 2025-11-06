@@ -4,4 +4,4 @@ go 1.24.5
 
 toolchain go1.24.7
 
-require github.com/goatx/goat v0.3.0
+require github.com/goatx/goat v0.3.1-0.20251105145510-2b3119b1b284

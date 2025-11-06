@@ -174,9 +174,9 @@ func TestCommunicationFlows(t *testing.T) {
 				eventType:        "Response",
 				handlerType:      onProtobufMessageHandler,
 				handlerEventType: "Request",
-				handlerID:        "ServiceStateMachine_OnProtobufMessage_Request_spec.go:54",
+				handlerID:        "ServiceStateMachine_OnProtobufMessage_Request_spec.go:53",
 				fileName:         "spec.go",
-				line:             56,
+				line:             55,
 			},
 		}
 
