@@ -1,6 +1,6 @@
 module github.com/goatx/goat-cli
 
-go 1.24.0
+go 1.24.5
 
 toolchain go1.24.7
 
@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/goatx/goat v0.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/mod v0.29.0 // indirect
