@@ -14,6 +14,7 @@ import (
 const (
 	GoatPackageFullPath         = "github.com/goatx/goat"
 	GoatProtobufPackageFullPath = "github.com/goatx/goat/protobuf"
+	GoatOpenapiPackageFullPath  = "github.com/goatx/goat/openapi"
 )
 
 type PackageInfo struct {

@@ -1,0 +1,7 @@
+sequenceDiagram
+    participant ClientStateMachine
+    participant UserService
+
+    ClientStateMachine->>UserService: CreateUserRequest
+    UserService->>ClientStateMachine: CreateUserResponse
+    UserService->>ClientStateMachine: GetUserResponse
