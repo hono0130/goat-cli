@@ -37,18 +37,6 @@ type CreateUserResponse struct {
 	Status string `json:"status"`
 }
 
-type GetUserRequest struct {
-	openapi.Schema[*ClientStateMachine, *UserService]
-	UserID string `openapi:"path=userId"`
-}
-
-type GetUserResponse struct {
-	openapi.Schema[*UserService, *ClientStateMachine]
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-}
-
 func createUserServiceModel() {
 	clientSpec := goat.NewStateMachineSpec(&ClientStateMachine{})
 	serviceSpec := openapi.NewServiceSpec(&UserService{})
@@ -77,17 +65,5 @@ func createUserServiceModel() {
 			return openapi.SendTo(ctx, service.Client, response)
 		},
 		openapi.WithOperationID("createUser"),
-	)
-
-	openapi.OnRequest(serviceSpec, serviceState, openapi.HTTPMethodGet, "/users/{userId}",
-		func(ctx context.Context, req *GetUserRequest, service *UserService) openapi.Response[*GetUserResponse] {
-			response := &GetUserResponse{
-				UserID:   1,
-				Username: "test",
-				Email:    "test@example.com",
-			}
-			return openapi.SendTo(ctx, service.Client, response)
-		},
-		openapi.WithOperationID("getUser"),
 	)
 }

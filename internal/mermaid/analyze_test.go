@@ -207,9 +207,9 @@ func TestCommunicationFlows(t *testing.T) {
 				to:          "UserService",
 				eventType:   "CreateUserRequest",
 				handlerType: onEntryHandler,
-				handlerID:   "ClientStateMachine_OnEntry__spec.go:63",
+				handlerID:   "ClientStateMachine_OnEntry__spec.go:51",
 				fileName:    "spec.go",
-				line:        68,
+				line:        56,
 			},
 			{
 				from:             "UserService",
@@ -217,19 +217,9 @@ func TestCommunicationFlows(t *testing.T) {
 				eventType:        "CreateUserResponse",
 				handlerType:      onRequestHandler,
 				handlerEventType: "CreateUserRequest",
-				handlerID:        "UserService_OnRequest_CreateUserRequest_spec.go:72",
+				handlerID:        "UserService_OnRequest_CreateUserRequest_spec.go:60",
 				fileName:         "spec.go",
-				line:             77,
-			},
-			{
-				from:             "UserService",
-				to:               "ClientStateMachine",
-				eventType:        "GetUserResponse",
-				handlerType:      onRequestHandler,
-				handlerEventType: "GetUserRequest",
-				handlerID:        "UserService_OnRequest_GetUserRequest_spec.go:83",
-				fileName:         "spec.go",
-				line:             89,
+				line:             65,
 			},
 		}
 
