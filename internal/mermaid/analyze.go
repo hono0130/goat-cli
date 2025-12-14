@@ -14,10 +14,12 @@ const (
 	stateMachineType         = "StateMachine"
 	sendToFunction           = "SendTo"
 	protobufSendToFunction   = "ProtobufSendTo"
+	openapiSendToFunction    = "SendTo"
 	onEntryHandler           = "OnEntry"
 	onEventHandler           = "OnEvent"
 	onExitHandler            = "OnExit"
 	onProtobufMessageHandler = "OnProtobufMessage"
+	onRequestHandler         = "OnRequest"
 )
 
 type sequenceDiagram struct {
@@ -217,7 +219,7 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 	}
 
 	kind := selExpr.Sel.Name
-	if kind != onEntryHandler && kind != onEventHandler && kind != onExitHandler && kind != onProtobufMessageHandler {
+	if kind != onEntryHandler && kind != onEventHandler && kind != onExitHandler && kind != onProtobufMessageHandler && kind != onRequestHandler {
 		return nil, false, nil
 	}
 
@@ -230,7 +232,8 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 		return nil, false, nil
 	}
 
-	handlerFunc, ok := callExpr.Args[len(callExpr.Args)-1].(*ast.FuncLit)
+	handlerFuncIndex := getHandlerFuncIndex(kind, callExpr.Args)
+	handlerFunc, ok := callExpr.Args[handlerFuncIndex].(*ast.FuncLit)
 	if !ok {
 		return nil, false, nil
 	}
@@ -238,6 +241,8 @@ func extractHandlerInfo(callExpr *ast.CallExpr, pkg *load.PackageInfo) (*handler
 	var eventType string
 	if kind == onEventHandler || kind == onProtobufMessageHandler {
 		eventType = extractEventTypeFromHandler(handlerFunc, pkg.TypesInfo)
+	} else if kind == onRequestHandler {
+		eventType = extractRequestTypeFromHandler(handlerFunc, pkg.TypesInfo)
 	}
 	handlerID := buildHandlerID(stateMachine, kind, eventType, handlerFunc, pkg)
 
@@ -258,8 +263,23 @@ func validateHandlerArgs(kind string, args []ast.Expr) bool {
 		return len(args) == 3
 	case onProtobufMessageHandler:
 		return len(args) == 4
+	case onRequestHandler:
+		// OnRequest(spec, state, method, path, handler, ...options)
+		return len(args) >= 5
 	default:
 		return false
+	}
+}
+
+func getHandlerFuncIndex(kind string, args []ast.Expr) int {
+	switch kind {
+	case onRequestHandler:
+		// OnRequest(spec, state, method, path, handler, ...options)
+		// handler is at index 4
+		return 4
+	default:
+		// For other handlers, function is the last argument
+		return len(args) - 1
 	}
 }
 
@@ -422,7 +442,7 @@ func buildElements(flows []flow) []element {
 	}
 
 	for _, f := range flows {
-		if f.handlerType == onEntryHandler {
+		if f.handlerType == onEntryHandler || f.handlerType == onRequestHandler {
 			elements := build(f.handlerID, map[string]bool{})
 			result = append(result, elements...)
 		}
@@ -465,7 +485,7 @@ func uniqueNextHandlers(current flow, flows []flow) []string {
 }
 
 func isEventHandler(kind string) bool {
-	return kind == onEventHandler || kind == onProtobufMessageHandler
+	return kind == onEventHandler || kind == onProtobufMessageHandler || kind == onRequestHandler
 }
 
 func isFromGoat(sel *ast.SelectorExpr, info *types.Info) (bool, error) {
@@ -479,15 +499,20 @@ func isFromGoat(sel *ast.SelectorExpr, info *types.Info) (bool, error) {
 	}
 	if pkgName, ok := obj.(*types.PkgName); ok {
 		if imported := pkgName.Imported(); imported != nil {
-			return imported.Path() == load.GoatPackageFullPath || imported.Path() == load.GoatProtobufPackageFullPath, nil
+			return isGoatPackage(imported.Path()), nil
 		}
 		return false, fmt.Errorf("unexpected nil imported package for %q", id.Name)
 	}
 	if pkg := obj.Pkg(); pkg != nil {
-		path := pkg.Path()
-		return path == load.GoatPackageFullPath || path == load.GoatProtobufPackageFullPath, nil
+		return isGoatPackage(pkg.Path()), nil
 	}
 	return false, fmt.Errorf("object for identifier %q has no package: %T", id.Name, obj)
+}
+
+func isGoatPackage(path string) bool {
+	return path == load.GoatPackageFullPath ||
+		path == load.GoatProtobufPackageFullPath ||
+		path == load.GoatOpenapiPackageFullPath
 }
 
 func namedTypeName(expr ast.Expr, info *types.Info) (string, bool) {
@@ -521,6 +546,41 @@ func extractEventTypeFromHandler(handlerFunc *ast.FuncLit, info *types.Info) str
 	eventParamType := eventParam.Type
 
 	tv, ok := info.Types[eventParamType]
+	if !ok || tv.Type == nil {
+		return ""
+	}
+
+	typ := tv.Type
+	if ptr, ok := typ.(*types.Pointer); ok {
+		typ = ptr.Elem()
+	}
+	if named, ok := typ.(*types.Named); ok {
+		return named.Obj().Name()
+	}
+
+	return ""
+}
+
+func extractRequestTypeFromHandler(handlerFunc *ast.FuncLit, info *types.Info) string {
+	if handlerFunc.Type == nil || handlerFunc.Type.Params == nil {
+		return ""
+	}
+
+	params := handlerFunc.Type.Params.List
+	// OnRequest handler: func(ctx, request, stateMachine) Response
+	if len(params) < 2 {
+		return ""
+	}
+
+	// Request type is the second parameter (index 1)
+	requestParam := params[1]
+	if len(requestParam.Names) == 0 {
+		return ""
+	}
+
+	requestParamType := requestParam.Type
+
+	tv, ok := info.Types[requestParamType]
 	if !ok || tv.Type == nil {
 		return ""
 	}

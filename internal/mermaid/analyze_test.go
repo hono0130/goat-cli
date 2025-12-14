@@ -29,6 +29,16 @@ func loadProtobufPackage(t *testing.T) *load.PackageInfo {
 	return pkg
 }
 
+func loadOpenapiPackage(t *testing.T) *load.PackageInfo {
+	t.Helper()
+	dir := filepath.Join(test.FixtureDir(t), "openapi")
+	pkg, err := load.Load(dir)
+	if err != nil {
+		t.Fatalf("failed to load fixture package: %v", err)
+	}
+	return pkg
+}
+
 func TestStateMachineOrder(t *testing.T) {
 	t.Parallel()
 	pkg := loadSpecPackage(t)
@@ -182,6 +192,39 @@ func TestCommunicationFlows(t *testing.T) {
 
 		if diff := cmp.Diff(want, got, cmp.AllowUnexported(flow{})); diff != "" {
 			t.Fatalf("communicationFlows (protobuf) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("openapi", func(t *testing.T) {
+		pkg := loadOpenapiPackage(t)
+		got, err := communicationFlows(pkg)
+		if err != nil {
+			t.Fatalf("communicationFlows returned error: %v", err)
+		}
+		want := []flow{
+			{
+				from:        "ClientStateMachine",
+				to:          "UserService",
+				eventType:   "CreateUserRequest",
+				handlerType: onEntryHandler,
+				handlerID:   "ClientStateMachine_OnEntry__spec.go:51",
+				fileName:    "spec.go",
+				line:        56,
+			},
+			{
+				from:             "UserService",
+				to:               "ClientStateMachine",
+				eventType:        "CreateUserResponse",
+				handlerType:      onRequestHandler,
+				handlerEventType: "CreateUserRequest",
+				handlerID:        "UserService_OnRequest_CreateUserRequest_spec.go:60",
+				fileName:         "spec.go",
+				line:             65,
+			},
+		}
+
+		if diff := cmp.Diff(want, got, cmp.AllowUnexported(flow{})); diff != "" {
+			t.Fatalf("communicationFlows (openapi) mismatch (-want +got):\n%s", diff)
 		}
 	})
 }
