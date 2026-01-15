@@ -23,19 +23,33 @@ type PackageInfo struct {
 }
 
 func Load(packagePath string) (*PackageInfo, error) {
-	abs, err := filepath.Abs(packagePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve package path %s: %w", packagePath, err)
-	}
-
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo |
 			packages.NeedModule | packages.NeedDeps,
-		Dir: abs,
 	}
 
-	pkgs, err := packages.Load(cfg, ".")
+	pattern := "."
+	base := packagePath
+	if strings.Contains(packagePath, "...") {
+		dir, suffix := filepath.Split(packagePath)
+		if suffix != "..." {
+			return nil, fmt.Errorf("unsupported ellipsis pattern: %s", packagePath)
+		}
+		if dir == "" {
+			dir = "."
+		}
+		base = dir
+		pattern = "./..."
+	}
+
+	abs, err := filepath.Abs(base)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve package path %s: %w", packagePath, err)
+	}
+	cfg.Dir = abs
+
+	pkgs, err := packages.Load(cfg, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load package in %s: %w", abs, err)
 	}
@@ -58,10 +72,9 @@ func Load(packagePath string) (*PackageInfo, error) {
 		return nil, fmt.Errorf("failed to obtain type information for package in %s", abs)
 	}
 
-	info := &PackageInfo{
+	return &PackageInfo{
 		Fset:      pkg.Fset,
 		Syntax:    pkg.Syntax,
 		TypesInfo: pkg.TypesInfo,
-	}
-	return info, nil
+	}, nil
 }
